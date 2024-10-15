@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { mutators } from "@/replicache/mutators";
 import { User } from "@/types/user";
 import { createUndoRedoManager, UndoEntry, UndoManager } from "@/undo/UndoManager";
 import { Redo, Undo } from "lucide-react";
@@ -9,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DataSheetGrid, checkboxColumn, textColumn, keyColumn, Column, intColumn } from "react-datasheet-grid";
 
 import { Operation } from "react-datasheet-grid/dist/types";
+import { Replicache } from "replicache";
 
 type Row = Partial<User>;
 
@@ -206,6 +208,29 @@ const UserList = () => {
   const canUndo = undoManagerRef.current?.getStatus().canUndo;
   const canRedo = undoManagerRef.current?.getStatus().canRedo;
 
+  useEffect(() => {
+    const spaceID = "nana";
+    const r = new Replicache({
+      pushURL: `/api/replicache/push?spaceID=${spaceID}`,
+      pullURL: `/api/replicache/pull?spaceID=${spaceID}`,
+      name: spaceID,
+      mutators: mutators,
+      pullInterval: 30000,
+      // To get your own license key run `npx replicache get-license`. (It's free.)
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      licenseKey: process.env.NEXT_PUBLIC_REPLICACHE_LICENSE_KEY!,
+    });
+
+    const eventSource = new EventSource("/api/replicache/poke");
+    eventSource.onmessage = (event) => {
+      console.log("poke", event);
+      r.pull();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, []);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.key === "z") {
