@@ -8,3 +8,5 @@ export type User = {
   address: string | null; // Thêm trường địa chỉ
   phoneNumber: string | null; // Thêm trường số điện thoại
 };
+
+export type UserUpdate = Partial<User> & Pick<User, "id">;
