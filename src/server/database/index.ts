@@ -1,8 +1,8 @@
-import { tx } from "@/server/database/config";
+import { getDB, tx } from "@/server/database/config";
 import { createDatabase } from "@/server/database/schema";
 
 async function init() {
-  await tx(createDatabase);
+  const db = getDB();
 }
 
 init();

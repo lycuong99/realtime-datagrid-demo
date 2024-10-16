@@ -1,15 +1,21 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
-import { newDb } from "pg-mem";
-import pgp, { IDatabase, ITask } from "pg-promise";
+// import { newDb } from "pg-mem";
+import { createDatabase } from "@/server/database/schema";
+import pgInit, { IDatabase, ITask } from "pg-promise";
 
+const pgp = pgInit();
 const { isolationLevel } = pgp.txMode;
 
 export const serverID = 1;
-
-async function initDB() {
+export function getConnectionString() {
+  return `postgresql://postgres:123456@localhost:5432/replicachedb`;
+}
+export async function initDB() {
   console.log("initializing database...");
-  const db = newDb().adapters.createPgPromise();
+  // const pg = await newDb().adapters.createPgPromise;
+  const db = await pgp(getConnectionString());
+  await tx(createDatabase, db);
   return db;
 }
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { mutators } from "@/replicache/mutators";
+import { M, mutators } from "@/replicache/mutators";
+import { listUsers } from "@/replicache/user";
 import { User } from "@/types/user";
 import { createUndoRedoManager, UndoEntry, UndoManager } from "@/undo/UndoManager";
 import { Redo, Undo } from "lucide-react";
@@ -10,11 +11,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DataSheetGrid, checkboxColumn, textColumn, keyColumn, Column, intColumn } from "react-datasheet-grid";
 
 import { Operation } from "react-datasheet-grid/dist/types";
-import { Replicache } from "replicache";
+import { ReadTransaction, Replicache } from "replicache";
+import { useSubscribe } from "replicache-react";
 
-type Row = Partial<User>;
+type Row = User;
 
 const UserList = () => {
+  const [rep, setRep] = useState<Replicache<M> | null>(null);
   const [data, setData] = useState<Row[]>([
     {
       id: nanoid(),
@@ -75,7 +78,7 @@ const UserList = () => {
       age: 49,
       address: "1600 Amphitheatre Parkway, Mountain View, CA",
       phoneNumber: "678-901-2345",
-    }, // Thêm dữ liệu mới
+    },
     {
       id: nanoid(),
       active: true,
@@ -85,8 +88,11 @@ const UserList = () => {
       age: 61,
       address: "1 Apple Park Way, Cupertino, CA",
       phoneNumber: "789-012-3456",
-    }, // Thêm dữ liệu mới
+    },
   ]);
+
+  const users = useSubscribe(rep, listUsers, { default: [] });
+  console.log(users);
 
   const columns: Column<Row>[] = [
     {
@@ -134,36 +140,35 @@ const UserList = () => {
 
     for (const operation of operations) {
       if (operation.type === "CREATE") {
+        console.log("CREATE");
         newValues.slice(operation.fromRowIndex, operation.toRowIndex).forEach(({ id }) => createdRowIds.add(id));
+        const newUser = (updateRows = newValues.slice(operation.fromRowIndex, operation.toRowIndex));
+        rep?.mutate.createUser(newUser[0]);
       }
 
-      // Handle update
       if (operation.type === "UPDATE") {
         newValues.slice(operation.fromRowIndex, operation.toRowIndex).forEach(({ id }) => {
           if (!createdRowIds.has(id) && !deletedRowIds.has(id)) {
             updatedRowIds.add(id);
           }
+
+          updateRows = newValues.slice(operation.fromRowIndex, operation.toRowIndex);
+          updateRows.forEach(updateRow=>{
+            rep?.mutate.updateUser(updateRow);
+          })
         });
       }
-      // Handle delete
 
       if (operation.type === "DELETE") {
         let keptRows = 0;
 
-        // Make sure to use `data` and not `newValue`
         data.slice(operation.fromRowIndex, operation.toRowIndex).forEach(({ id }, i) => {
-          // If the row was updated, dismiss the update
-          // No need to update a row and immediately delete it
           updatedRowIds.delete(id);
 
           if (createdRowIds.has(id)) {
-            // Row was freshly created, simply ignore it
-            // No need to insert a row and immediately delete it
             createdRowIds.delete(id);
           } else {
-            // Add the row to the deleted Set
             deletedRowIds.add(id);
-            // Insert it back into newValue to display it in red to the user
             newValues.splice(operation.fromRowIndex + keptRows++, 0, data[operation.fromRowIndex + i]);
           }
         });
@@ -216,8 +221,6 @@ const UserList = () => {
       name: spaceID,
       mutators: mutators,
       pullInterval: 30000,
-      // To get your own license key run `npx replicache get-license`. (It's free.)
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       licenseKey: process.env.NEXT_PUBLIC_REPLICACHE_LICENSE_KEY!,
     });
 
@@ -227,16 +230,19 @@ const UserList = () => {
       r.pull();
     };
 
+    setRep(r);
+
     return () => {
       eventSource.close();
     };
   }, []);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.key === "z") {
-        handleUndo(); // Ctrl + Z để hoàn tác
+        handleUndo();
       } else if (event.ctrlKey && event.key === "y") {
-        handleRedo(); // Ctrl + Y để làm lại
+        handleRedo();
       }
     };
 
@@ -245,9 +251,11 @@ const UserList = () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
+
   const createdRowIds = useMemo(() => new Set(), []);
   const deletedRowIds = useMemo(() => new Set(), []);
   const updatedRowIds = useMemo(() => new Set(), []);
+
   return (
     <>
       <div className="flex gap-4 justify-center mb-9">
@@ -261,9 +269,18 @@ const UserList = () => {
 
       <DataSheetGrid
         rowKey="id"
-        createRow={() => ({ id: nanoid() })}
+        createRow={() => ({
+          id: nanoid(),
+          active: true,
+          firstName: "",
+          lastName: "",
+          email: "",
+          age: null,
+          address: "",
+          phoneNumber: "",
+        })}
         duplicateRow={({ rowData }) => ({ ...rowData, id: nanoid() })}
-        value={data}
+        value={users}
         onChange={handleChange}
         columns={columns}
         rowClassName={({ rowData }) => {
@@ -281,5 +298,4 @@ const UserList = () => {
     </>
   );
 };
-
 export default UserList;

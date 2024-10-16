@@ -1,19 +1,22 @@
-import { Transaction } from "@/server/database/config";
+import { serverID, Transaction } from "@/server/database/config";
 
 export async function createDatabase(t: Transaction) {
+  if (await schemaExists(t)) {
+    return;
+  }
+  console.log("creating database schema...");
   // A single global version number for the entire database.
-  const serverID = "schemaVersion";
   await t.none(`create table replicache_server (id integer primary key not null, version integer)`);
   await t.none(`insert into replicache_server (id, version) values ($1, 1)`, serverID);
 
   // Stores chat messages.
-  await t.none(`create table user (
-           id text primary key not null,
-           sender varchar(255) not null,
-           content text not null,
-           ord integer not null,
-           deleted boolean not null,
-           version integer not null)`);
+  // await t.none(`create table user (
+  //          id text primary key not null,
+  //          sender varchar(255) not null,
+  //          content text not null,
+  //          ord integer not null,
+  //          deleted boolean not null,
+  //          version integer not null)`);
 
   // Stores last mutationID processed for each Replicache client.
   await t.none(`create table replicache_client (
@@ -34,4 +37,12 @@ export async function createDatabase(t: Transaction) {
   await t.none(`create unique index on entry (key)`);
   await t.none(`create index on entry (deleted)`);
   await t.none(`create index on entry (last_modified_version)`);
+}
+
+async function schemaExists(t: Transaction): Promise<number> {
+  const spaceExists = await t.one(`select exists(
+      select from pg_tables where schemaname = 'public'
+      and tablename = 'replicache_server')`);
+  console.log("spaceExists", spaceExists);
+  return spaceExists.exists;
 }

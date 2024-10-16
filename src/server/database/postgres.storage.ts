@@ -1,7 +1,7 @@
 import type { JSONValue } from "replicache";
 import type { Storage } from "replicache-transaction";
-import { putEntry, getEntry, delEntry, getEntries } from "./data.js";
 import { Transaction } from "@/server/database/config.js";
+import { delEntry, getEntries, getEntry, putEntry } from "@/server/database/data";
 
 // Implements the Storage interface required by replicache-transaction in terms
 // of our Postgres database.
@@ -17,6 +17,7 @@ export class PostgresStorage implements Storage {
   }
 
   putEntry(key: string, value: JSONValue): Promise<void> {
+    console.log(":::putEntry", key, value);
     return putEntry(this._executor, key, value, this._version);
   }
 

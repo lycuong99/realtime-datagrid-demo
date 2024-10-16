@@ -12,8 +12,9 @@ export const mutators = {
   deleteUser: async (tx: WriteTransaction, id: string) => {
     await tx.del(`user/${id}`);
   },
-  createTodo: async (tx: WriteTransaction, user: User) => {
-    await tx.set(`todo/${user.id}`, user);
+  createUser: async (tx: WriteTransaction, user: User) => {
+    console.log(":::createUser", user);
+    await tx.set(`user/${user.id}`, user);
   },
   unDeleteUser: async (tx: WriteTransaction, entry: User) => {
     await tx.set(`user/${entry.id}`, entry);
