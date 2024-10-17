@@ -1,5 +1,10 @@
 import { getPokeBackend } from "@/server/poke";
+import { nanoid } from "nanoid";
 import { NextRequest } from "next/server";
+
+export function ok(value: any) {
+  return { value, error: false };
+}
 
 export async function GET(req: NextRequest) {
   // const { spaceID } = req.url;
@@ -14,20 +19,31 @@ export async function GET(req: NextRequest) {
   const customReadable = new ReadableStream({
     start(controller) {
       let id = 1;
+      const encoder = new TextEncoder();
+
       function emit(eventName: string, data: string) {
-        const encoder = new TextEncoder();
-        controller.enqueue(encoder.encode(`id: ${id}\nevent: ${eventName}\n`));
-        const chunks = data.split("\n");
-        for (const chunk of chunks) {
-          controller.enqueue(encoder.encode(`data: ${encodeURIComponent(chunk)}\n`));
+        try {
+          controller.enqueue(encoder.encode(`id: ${id}\nevent: ${eventName}\n`));
+          const chunks = data.split("\n");
+          for (const chunk of chunks) {
+            controller.enqueue(encoder.encode(`data: ${encodeURIComponent(chunk)}\n`));
+          }
+          controller.enqueue(encoder.encode("\n"));
+          id++;
+        } catch (error) {
+          console.error("Error encoding data:", error);
         }
-        controller.enqueue(encoder.encode("\n"));
-        id++;
       }
 
       removeListener = pubsub.addListeners(spaceID, () => {
         emit("poke", "");
+        console.log("poke", "");
       });
+
+      // const interval = setInterval(function run() {
+      //   emit('ping', '')
+
+      // }, 30_000)
     },
     cancel() {
       removeListener();

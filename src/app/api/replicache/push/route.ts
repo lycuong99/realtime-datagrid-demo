@@ -1,6 +1,12 @@
 import { mutators } from "@/replicache/mutators";
 import { Transaction, tx } from "@/server/database/config";
-import { getCurrentVersion, getLastMutationID, setLastMutationID } from "@/server/database/data";
+import {
+  getGlobalCurrentVersion,
+  getLastMutationID,
+  putEntry,
+  setGlobalVersion,
+  setLastMutationID,
+} from "@/server/database/data";
 import { PostgresStorage } from "@/server/database/postgres.storage";
 import { getPokeBackend } from "@/server/poke";
 import { NextRequest, NextResponse } from "next/server";
@@ -41,7 +47,7 @@ export async function POST(req: NextRequest) {
   try {
     const { clientGroupID } = push;
     await tx(async (t) => {
-      const { version: prevVersion } = await getCurrentVersion(t);
+      const { version: prevVersion } = await getGlobalCurrentVersion(t);
       const nextVersion = prevVersion + 1;
 
       const storage = new PostgresStorage(nextVersion, t);
@@ -69,9 +75,35 @@ export async function POST(req: NextRequest) {
         if (!mutator) {
           console.error(`Unknown mutator: ${mutation.name} - skipping`);
         }
-
         try {
-          await mutator(tx, mutation.args);
+          switch (mutation.name) {
+            case "createUser":
+              const user = mutation.args;
+              // await mutators.createUser(tx, user);
+              await putEntry(t, `user/${user.id}`, user, nextVersion);
+              break;
+            case "updateUser":
+              const update = mutation.args;
+              // await mutators.updateUser(tx, update);
+              try {
+                await putEntry(t, `user/${update.id}`, update, nextVersion);
+              } catch (error) {
+                console.error("Error executing mutator:", error);
+              }
+              break;
+            case "deleteUser":
+              const id = mutation.args;
+              await mutators.deleteUser(tx, id);
+              break;
+            case "unDeleteUser":
+              const entry = mutation.args;
+              await mutators.unDeleteUser(tx, entry);
+              break;
+            default:
+              console.error(`Unknown mutator: ${mutation.name} - skipping`);
+          }
+
+          // await mutator(tx, mutation.args);
         } catch (e) {
           console.error(`Error executing mutator: ${JSON.stringify(mutator)}: ${e}`);
         }
@@ -79,10 +111,13 @@ export async function POST(req: NextRequest) {
         await setLastMutationID(t, clientID, clientGroupID, nextMutationID, nextVersion);
       }
 
+      await setGlobalVersion(t, nextVersion);
+
       const pokeBackend = getPokeBackend();
       pokeBackend.poke("test");
     });
   } catch (error) {
+    console.error(error);
     NextResponse.json(error, { status: 500 });
   }
 

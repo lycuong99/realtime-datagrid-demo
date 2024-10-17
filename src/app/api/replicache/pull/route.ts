@@ -1,5 +1,5 @@
 import { tx } from "@/server/database/config";
-import { getChangedEntries, getCurrentVersion, getLastMutationIDChanges } from "@/server/database/data";
+import { getChangedEntries, getGlobalCurrentVersion, getLastMutationIDChanges } from "@/server/database/data";
 import { NextRequest, NextResponse } from "next/server";
 import { PullResponse } from "replicache";
 import { z } from "zod";
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const res = await tx(async (t) => {
-      const { version: currentVersion } = await getCurrentVersion(t);
+      const { version: currentVersion } = await getGlobalCurrentVersion(t);
 
       if (fromVersion > currentVersion) {
         throw new Error(
