@@ -92,7 +92,6 @@ const UserList = () => {
   ]);
 
   const users = useSubscribe(rep, listUsers, { default: [] });
-  console.log(users);
 
   const columns: Column<Row>[] = [
     {
@@ -165,6 +164,8 @@ const UserList = () => {
         data.slice(operation.fromRowIndex, operation.toRowIndex).forEach(({ id }, i) => {
           updatedRowIds.delete(id);
 
+          rep?.mutate.deleteUser(id);
+
           if (createdRowIds.has(id)) {
             createdRowIds.delete(id);
           } else {
@@ -225,8 +226,11 @@ const UserList = () => {
     });
 
     const eventSource = new EventSource("/api/replicache/poke");
+    eventSource.addEventListener("open", () => {
+      console.log("open POKE");
+    });
     eventSource.onmessage = (event) => {
-      console.log("poke", event);
+      console.log(":::::poke", event);
       r.pull();
     };
 
