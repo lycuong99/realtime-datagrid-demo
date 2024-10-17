@@ -10,6 +10,7 @@ export async function getEntry(executor: Transaction, key: string): Promise<JSON
 }
 
 export async function putEntry(executor: Transaction, key: string, value: JSONValue, version: number): Promise<void> {
+  console.log(":::putEntry", key, value);
   await executor.none(
     `
       insert into entry (key, value, deleted, last_modified_version)
@@ -39,8 +40,11 @@ export async function* getEntries(executor: Transaction, fromKey: string): Async
   }
 }
 
-export async function getCurrentVersion(executor: Transaction) {
+export async function getGlobalCurrentVersion(executor: Transaction) {
   return executor.one<{ version: number }>("select version from replicache_server where id = $1", serverID);
+}
+export async function setGlobalVersion(executor: Transaction, version: number) {
+  await executor.none("update replicache_server set version = $1 where id = $2", [version, serverID]);
 }
 export async function getChangedEntries(
   executor: Transaction,
