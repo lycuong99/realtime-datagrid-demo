@@ -11,190 +11,166 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DataSheetGrid, checkboxColumn, textColumn, keyColumn, Column, intColumn } from "react-datasheet-grid";
 
 import { Operation } from "react-datasheet-grid/dist/types";
-import { ReadTransaction, Replicache } from "replicache";
+import { Replicache } from "replicache";
 import { useSubscribe } from "replicache-react";
 
 type Row = User;
 
+function getEmptyRow(): Row {
+  return {
+    id: nanoid(),
+    active: true,
+    firstName: "",
+    lastName: "",
+    email: "",
+    age: 0,
+    address: "",
+    phoneNumber: "",
+  };
+}
+
+function duplicateRow({ rowData }: { rowData: Row }): Row {
+  return { ...rowData, id: nanoid() };
+}
+
+const columns: Column<Row>[] = [
+  {
+    ...keyColumn<Row, "active">("active", checkboxColumn),
+    title: "Active",
+  },
+  {
+    ...keyColumn<Row, "firstName">("firstName", textColumn),
+    title: "First name",
+  },
+  {
+    ...keyColumn<Row, "lastName">("lastName", textColumn),
+    title: "Last name",
+  },
+  {
+    ...keyColumn<Row, "email">("email", textColumn),
+    title: "Email",
+  },
+  {
+    ...keyColumn<Row, "age">("age", intColumn),
+    title: "Age",
+  },
+  {
+    ...keyColumn<Row, "address">("address", textColumn),
+    title: "Address",
+  },
+  {
+    ...keyColumn<Row, "phoneNumber">("phoneNumber", textColumn),
+    title: "Phone Number",
+  },
+];
+
 const UserList = () => {
   const [rep, setRep] = useState<Replicache<M> | null>(null);
-  const [data, setData] = useState<Row[]>([
-    {
-      id: nanoid(),
-      active: true,
-      firstName: "Elon",
-      lastName: "Musk",
-      email: "elon@tesla.com",
-      age: 50,
-      address: "3500 Deer Creek Road, Palo Alto, CA",
-      phoneNumber: "123-456-7890",
-    },
-    {
-      id: nanoid(),
-      active: false,
-      firstName: "Jeff",
-      lastName: "Bezos",
-      email: "jeff@amazon.com",
-      age: 57,
-      address: "410 Terry Ave N, Seattle, WA",
-      phoneNumber: "234-567-8901",
-    },
-    {
-      id: nanoid(),
-      active: true,
-      firstName: "Bill",
-      lastName: "Gates",
-      email: "bill@microsoft.com",
-      age: 66,
-      address: "500 5th Ave N, Seattle, WA",
-      phoneNumber: "345-678-9012",
-    },
-    {
-      id: nanoid(),
-      active: true,
-      firstName: "Mark",
-      lastName: "Zuckerberg",
-      email: "mark@facebook.com",
-      age: 37,
-      address: "1 Hacker Way, Menlo Park, CA",
-      phoneNumber: "456-789-0123",
-    },
-    {
-      id: nanoid(),
-      active: false,
-      firstName: "Larry",
-      lastName: "Page",
-      email: "larry@google.com",
-      age: 49,
-      address: "1600 Amphitheatre Parkway, Mountain View, CA",
-      phoneNumber: "567-890-1234",
-    },
-    {
-      id: nanoid(),
-      active: true,
-      firstName: "Sundar",
-      lastName: "Pichai",
-      email: "sundar@google.com",
-      age: 49,
-      address: "1600 Amphitheatre Parkway, Mountain View, CA",
-      phoneNumber: "678-901-2345",
-    },
-    {
-      id: nanoid(),
-      active: true,
-      firstName: "Tim",
-      lastName: "Cook",
-      email: "tim@apple.com",
-      age: 61,
-      address: "1 Apple Park Way, Cupertino, CA",
-      phoneNumber: "789-012-3456",
-    },
-  ]);
 
   const users = useSubscribe(rep, listUsers, { default: [] });
-
-  const columns: Column<Row>[] = [
-    {
-      ...keyColumn<Row, "active">("active", checkboxColumn),
-      title: "Active",
-    },
-    {
-      ...keyColumn<Row, "firstName">("firstName", textColumn),
-      title: "First name",
-    },
-    {
-      ...keyColumn<Row, "lastName">("lastName", textColumn),
-      title: "Last name",
-    },
-    {
-      ...keyColumn<Row, "email">("email", textColumn),
-      title: "Email",
-    },
-    {
-      ...keyColumn<Row, "age">("age", intColumn),
-      title: "Age",
-    },
-    {
-      ...keyColumn<Row, "address">("address", textColumn),
-      title: "Address",
-    },
-    {
-      ...keyColumn<Row, "phoneNumber">("phoneNumber", textColumn),
-      title: "Phone Number",
-    },
-  ];
 
   const undoManagerRef = useRef<UndoManager | null>();
   useEffect(() => {
     undoManagerRef.current = createUndoRedoManager();
   }, []);
 
-  function handleChange(newValues: Row[], operations: Operation[]) {
-    const undoManager = undoManagerRef.current;
+  const rowChangeHandler = {
+    CREATE: (operation: Operation, newValues: Row[]) => {
+      const undoManager = undoManagerRef.current;
+      if (!undoManager) return;
 
-    let updateRows: Row[] = [];
-    for (const operation of operations) {
-      updateRows = newValues.slice(operation.fromRowIndex, operation.toRowIndex);
-    }
+      const newUsers = newValues.slice(operation.fromRowIndex, operation.toRowIndex);
 
-    for (const operation of operations) {
-      if (operation.type === "CREATE") {
-        console.log("CREATE");
-        newValues.slice(operation.fromRowIndex, operation.toRowIndex).forEach(({ id }) => createdRowIds.add(id));
-        const newUser = (updateRows = newValues.slice(operation.fromRowIndex, operation.toRowIndex));
-        rep?.mutate.createUser(newUser[0]);
-      }
-
-      if (operation.type === "UPDATE") {
-        newValues.slice(operation.fromRowIndex, operation.toRowIndex).forEach(({ id }) => {
-          if (!createdRowIds.has(id) && !deletedRowIds.has(id)) {
-            updatedRowIds.add(id);
-          }
-
-          updateRows = newValues.slice(operation.fromRowIndex, operation.toRowIndex);
-          updateRows.forEach(updateRow=>{
-            rep?.mutate.updateUser(updateRow);
-          })
-        });
-      }
-
-      if (operation.type === "DELETE") {
-        let keptRows = 0;
-
-        data.slice(operation.fromRowIndex, operation.toRowIndex).forEach(({ id }, i) => {
-          updatedRowIds.delete(id);
-
-          rep?.mutate.deleteUser(id);
-
-          if (createdRowIds.has(id)) {
-            createdRowIds.delete(id);
-          } else {
-            deletedRowIds.add(id);
-            newValues.splice(operation.fromRowIndex + keptRows++, 0, data[operation.fromRowIndex + i]);
-          }
-        });
-      }
-    }
-
-    if (undoManager) {
-      const oldDatas = data;
       const undoEntry: UndoEntry = {
         operation: () => {
-          setData(newValues);
+          newUsers.forEach((newUser) => {
+            createdRowIds.add(newUser.id);
+            rep?.mutate.createUser(newUser);
+          });
         },
-        description: "CHANGE",
         reverseOperation: () => {
-          console.log("reverseOperation");
-          setData(oldDatas);
+          newUsers.forEach((newUser) => {
+            createdRowIds.delete(newUser.id);
+            rep?.mutate.deleteUser(newUser.id);
+          });
         },
-        reverseDescription: "REDO",
+        description: "CREATE USER",
+        reverseDescription: "REDO CREATE USER",
         scopeName: "",
         hasRedoConflict: () => false,
         hasUndoConflict: () => false,
       };
+
       undoManager.do(undoEntry);
+    },
+    UPDATE: (operation: Operation, newValues: Row[]) => {
+      const undoManager = undoManagerRef.current;
+      if (!undoManager) return;
+
+      const updateRows = newValues.slice(operation.fromRowIndex, operation.toRowIndex);
+      updateRows.forEach(({ id }) => !createdRowIds.has(id) && !deletedRowIds.has(id) && updatedRowIds.add(id));
+      rep?.mutate.updateUser(updateRows[0]);
+
+      const updateIds = updateRows.map(({ id }) => id);
+      const currentUsers = users.filter((user) => updateIds.includes(user.id));
+
+      const undoEntry: UndoEntry = {
+        operation: () => {
+          updateRows.forEach((user) => {
+            updatedRowIds.add(user.id);
+            rep?.mutate.updateUser(user);
+          });
+        },
+        reverseOperation: () => {
+          currentUsers.forEach((user) => {
+            updatedRowIds.delete(user.id);
+            rep?.mutate.updateUser(user);
+          });
+        },
+        description: "UPDATE USER",
+        reverseDescription: "REDO UPDATE USER",
+        scopeName: "",
+        hasRedoConflict: () => false,
+        hasUndoConflict: () => false,
+      };
+
+      undoManager.do(undoEntry);
+    },
+    DELETE: (operation: Operation) => {
+      const undoManager = undoManagerRef.current;
+      if (!undoManager) return;
+
+      const deleteRows = users.slice(operation.fromRowIndex, operation.toRowIndex);
+      const undoEntry: UndoEntry = {
+        operation: () => {
+          deleteRows.forEach((user) => {
+            // deletedRowIds.add(user.id);
+            rep?.mutate.deleteUser(user.id);
+          });
+        },
+        reverseOperation: () => {
+          deleteRows.forEach((user) => {
+            // deletedRowIds.delete(user.id);
+            rep?.mutate.unDeleteUser(user);
+          });
+        },
+        description: "DELETE USER",
+        reverseDescription: "REDO DELETE USER",
+        scopeName: "",
+        hasRedoConflict: () => false,
+        hasUndoConflict: () => false,
+      };
+
+      undoManager.do(undoEntry);
+    },
+  };
+  function handleChange(newValues: Row[], operations: Operation[]) {
+    console.log("handleChange", operations.length);
+    for (const operation of operations) {
+      console.log("handleChange", operation.fromRowIndex, operation.toRowIndex);
+
+      rowChangeHandler[operation.type](operation, newValues);
     }
-    console.log("handleChange", updateRows, operations);
   }
 
   function handleUndo() {
@@ -226,16 +202,27 @@ const UserList = () => {
     });
 
     const eventSource = new EventSource("/api/replicache/poke");
-    eventSource.addEventListener("open", () => {
-      console.log("open POKE");
-    });
-    eventSource.onmessage = (event) => {
+    eventSource.addEventListener("message", (event) => {
       console.log(":::::poke", event);
       r.pull();
-    };
+    });
+    eventSource.addEventListener("open", () => {
+      console.log("::::: POKE OPEN");
+    });
+    // eventSource.onmessage = (event) => {
+    //   console.log(":::::poke", event);
+    //   r.pull();
+    // };
+
+    eventSource.addEventListener("poke", (event) => {
+      console.log(":::::poke test", event);
+      r.pull();
+    });
 
     setRep(r);
-
+    eventSource.onerror = (event) => {
+      console.log(":::::poke error", event);
+    };
     return () => {
       eventSource.close();
     };
@@ -273,17 +260,8 @@ const UserList = () => {
 
       <DataSheetGrid
         rowKey="id"
-        createRow={() => ({
-          id: nanoid(),
-          active: true,
-          firstName: "",
-          lastName: "",
-          email: "",
-          age: null,
-          address: "",
-          phoneNumber: "",
-        })}
-        duplicateRow={({ rowData }) => ({ ...rowData, id: nanoid() })}
+        createRow={getEmptyRow}
+        duplicateRow={duplicateRow}
         value={users}
         onChange={handleChange}
         columns={columns}

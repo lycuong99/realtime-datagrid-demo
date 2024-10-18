@@ -1,6 +1,7 @@
 import { mutators } from "@/replicache/mutators";
 import { Transaction, tx } from "@/server/database/config";
 import {
+  delEntry,
   getGlobalCurrentVersion,
   getLastMutationID,
   putEntry,
@@ -93,11 +94,13 @@ export async function POST(req: NextRequest) {
               break;
             case "deleteUser":
               const id = mutation.args;
-              await mutators.deleteUser(tx, id);
+              await delEntry(t, `user/${id}`, nextVersion);
+              // await mutators.deleteUser(tx, id);
               break;
             case "unDeleteUser":
               const entry = mutation.args;
-              await mutators.unDeleteUser(tx, entry);
+              await putEntry(t, `user/${entry.id}`, entry, nextVersion);
+              // await mutators.unDeleteUser(tx, entry);
               break;
             default:
               console.error(`Unknown mutator: ${mutation.name} - skipping`);

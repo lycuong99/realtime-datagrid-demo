@@ -1,18 +1,17 @@
 import { getPokeBackend } from "@/server/poke";
-import { nanoid } from "nanoid";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export function ok(value: any) {
   return { value, error: false };
 }
 
 export async function GET(req: NextRequest) {
-  // const { spaceID } = req.url;
+  const res = handlePokeSSEWithTransformStream(req);
+  return res;
+}
+
+function handlePokeSSE(req: NextRequest) {
   const spaceID = "test";
-  console.log("connnected to poke endpoint from spaceID", req.url);
-  req.headers.set("Content-Type", "text/event-stream");
-  req.headers.set("Cache-Control", "no-cache");
-  req.headers.set("Connection", "keep-alive");
   const pubsub = getPokeBackend();
   let removeListener: () => void;
 
@@ -36,14 +35,15 @@ export async function GET(req: NextRequest) {
       }
 
       removeListener = pubsub.addListeners(spaceID, () => {
+        controller.enqueue(encoder.encode("\n"));
+
         emit("poke", "");
         console.log("poke", "");
       });
 
-      // const interval = setInterval(function run() {
-      //   emit('ping', '')
-
-      // }, 30_000)
+      setInterval(function run() {
+        emit("ping", "");
+      }, 1000);
     },
     cancel() {
       removeListener();
@@ -57,6 +57,58 @@ export async function GET(req: NextRequest) {
       "Content-Encoding": "none",
       "Cache-Control": "no-cache, no-transform",
       "Content-Type": "text/event-stream; charset=utf-8",
+    },
+  });
+}
+function toDataString(data: string | Record<string, any>): string {
+  if (isObject(data)) {
+    return toDataString(JSON.stringify(data));
+  }
+  return data
+    .split(/\r\n|\r|\n/)
+    .map((line: string) => `data: ${line}\n\n`)
+    .join("");
+}
+function isObject(value: any) {
+  return value !== null && typeof value === "object";
+}
+function handlePokeSSEWithTransformStream(req: NextRequest) {
+  const spaceID = "test";
+  const pubsub = getPokeBackend();
+
+  const stream = new TransformStream();
+  const writer = stream.writable.getWriter();
+  const encoder = new TextEncoder();
+  let id = 1;
+  function emit(eventName: string, data: string) {
+    try {
+      writer.write(encoder.encode(`event: ${eventName}\n`));
+      const chunks = data.split("\n");
+      for (const chunk of chunks) {
+        writer.write(encoder.encode(`data: ${encodeURIComponent(chunk)}\n`));
+      }
+      writer.write(encoder.encode("\n"));
+      id++;
+    } catch (error) {
+      console.error("Error encoding data:", error);
+    }
+  }
+
+  const removeListener = pubsub.addListeners(spaceID, () => {
+    emit("poke", "");
+    console.log("poke", "", stream);
+  });
+
+  req.signal.addEventListener("abort", async () => {
+    writer.close();
+    removeListener();
+  });
+
+  return new NextResponse(stream.readable, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      Connection: "keep-alive",
+      "Cache-Control": "no-cache, no-transform",
     },
   });
 }
